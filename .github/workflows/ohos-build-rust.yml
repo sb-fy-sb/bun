@@ -288,7 +288,11 @@ jobs:
       - name: Build Bun
         working-directory: bun
         run: |
-          ninja -C build/release-ohos bun -j$NINJA_JOBS
+          # First run may fail on msgpackr-extract node-gyp (optional dep, harmless)
+          ninja -C build/release-ohos bun -j$NINJA_JOBS || {
+            echo "⚠️ First ninja run failed (likely optional npm dep), retrying..."
+            ninja -C build/release-ohos bun -j$NINJA_JOBS
+          }
 
       - name: Verify binary
         working-directory: bun
