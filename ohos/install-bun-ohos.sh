@@ -53,11 +53,11 @@ esac
 # Check OS
 OS=$(uname -s)
 case "$OS" in
-  Linux)
-    ok "Operating System: Linux"
+  Linux|HarmonyOS)
+    ok "Operating System: $OS"
     ;;
   *)
-    error "Unsupported OS: $OS (requires Linux)"
+    error "Unsupported OS: $OS (requires Linux or HarmonyOS)"
     ;;
 esac
 
