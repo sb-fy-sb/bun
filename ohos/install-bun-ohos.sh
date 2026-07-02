@@ -162,15 +162,42 @@ fi
 # Export PATH for current session
 export PATH="$BIN_DIR:$PATH"
 
-# --- Verify ---
+# --- Verify & Sign ---
 
 info "Verifying installation..."
 if [ -x "$INSTALL_BIN" ]; then
-  VERSION=$("$INSTALL_BIN" --version 2>/dev/null || echo "unknown")
+  # Try to auto-sign if binary-sign-tool is available (OHOS device only)
+  SIGN_TOOL=""
+  for p in \
+    "/system/bin/binary-sign-tool" \
+    "/usr/bin/binary-sign-tool" \
+    "$(command -v binary-sign-tool 2>/dev/null)"; do
+    if [ -n "$p" ] && [ -x "$p" ]; then SIGN_TOOL="$p"; break; fi
+  done
+
+  if [ -n "$SIGN_TOOL" ]; then
+    info "Signing binary with $SIGN_TOOL..."
+    SIGNED="${INSTALL_BIN}.signed"
+    rm -f "$SIGNED"
+    "$SIGN_TOOL" sign -inFile "$INSTALL_BIN" -outFile "$SIGNED" -selfSign 1 2>/dev/null && {
+      mv -f "$SIGNED" "$INSTALL_BIN"
+      chmod +x "$INSTALL_BIN"
+      ok "Binary signed successfully"
+    } || {
+      rm -f "$SIGNED"
+      warn "Auto-signing failed, you may need to sign manually:"
+      warn "  binary-sign-tool sign -inFile \"$INSTALL_BIN\" -outFile \"$INSTALL_BIN\" -selfSign 1"
+    }
+  else
+    warn "binary-sign-tool not found (not on OHOS device?)"
+    warn "To run bun on OHOS, sign it first:"
+    warn "  binary-sign-tool sign -inFile \"$INSTALL_BIN\" -outFile \"$INSTALL_BIN\" -selfSign 1"
+  fi
+
+  VERSION=$("$INSTALL_BIN" --version 2>/dev/null || echo "unknown (may need signing)")
   ok "bun $VERSION installed successfully!"
 else
-  warn "Binary installed but may need signing for OHOS execution"
-  warn "Run: binary-sign-tool sign -inFile \"$INSTALL_BIN\" -outFile \"$INSTALL_BIN\" -selfSign 1"
+  error "Installation failed: binary not found at $INSTALL_BIN"
 fi
 
 echo ""

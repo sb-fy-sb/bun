@@ -27,11 +27,6 @@ on:
         required: false
         default: 'ohos-aarch64'
         type: string
-      skip_signing:
-        description: 'Skip binary signing'
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: ohos-release
@@ -241,74 +236,10 @@ jobs:
           done
           echo "✅ Binary validation passed"
 
-      # ===== Signing (optional) =====
-
-      - name: Sign binary
-        if: inputs.skip_signing != true
-        working-directory: bun
-        run: |
-          BIN=build/release-ohos/bun
-
-          # binary-sign-tool: native ARM64 ELF in OHOS SDK toolchains
-          SIGN_TOOL=""
-          for p in \
-            "/home/user/linux-aarch64/toolchains/lib/binary-sign-tool" \
-            "$OHOS_SDK_ROOT/../linux-aarch64/toolchains/lib/binary-sign-tool" \
-            "/opt/ohos/toolchains/lib/binary-sign-tool"; do
-            if [ -x "$p" ]; then SIGN_TOOL="$p"; break; fi
-          done
-
-          if [ -z "$SIGN_TOOL" ] || [ ! -x "$SIGN_TOOL" ]; then
-            echo "⚠️ binary-sign-tool not found, skipping signing"
-            exit 0
-          fi
-
-          # Keystore
-          KEYSTORE=""
-          for p in \
-            "/home/user/linux-aarch64/toolchains/lib/OpenHarmony.p12" \
-            "$OHOS_SDK_ROOT/../linux-aarch64/toolchains/lib/OpenHarmony.p12"; do
-            if [ -f "$p" ]; then KEYSTORE="$p"; break; fi
-          done
-
-          echo "Sign tool: $SIGN_TOOL"
-          echo "Keystore: ${KEYSTORE:-"(using -selfSign 1)"}"
-
-          # Remove existing .codesign section if present (re-signing fails otherwise)
-          readelf -S "$BIN" 2>/dev/null | grep -q codesign && \
-            $OHOS_SDK_ROOT/llvm-22/bin/llvm-objcopy --remove-section=.codesign "$BIN" 2>/dev/null || true
-
-          # Sign
-          SIGNED="${BIN}.signed"
-          rm -f "$SIGNED"
-
-          if [ -n "$KEYSTORE" ]; then
-            "$SIGN_TOOL" sign \
-              -inFile "$BIN" \
-              -outFile "$SIGNED" \
-              -signAlg SHA256withECDSA \
-              -keystoreFile "$KEYSTORE" \
-              -selfSign 1 || {
-                echo "⚠️ Keystore signing failed, trying self-sign..."
-                rm -f "$SIGNED"
-                "$SIGN_TOOL" sign -inFile "$BIN" -outFile "$SIGNED" -selfSign 1 || {
-                  echo "⚠️ Signing failed, using unsigned binary"
-                  exit 0
-                }
-              }
-          else
-            "$SIGN_TOOL" sign -inFile "$BIN" -outFile "$SIGNED" -selfSign 1 || {
-              echo "⚠️ Signing failed, using unsigned binary"
-              exit 0
-            }
-          fi
-
-          if [ -f "$SIGNED" ]; then
-            mv -f "$SIGNED" "$BIN"
-            echo "✅ Binary signed successfully"
-          else
-            echo "⚠️ Signed output not found, using unsigned binary"
-          fi
+      # ===== Signing =====
+      # binary-sign-tool is an OHOS-only binary (needs libc++.so from HarmonyOS).
+      # It cannot run on the openEuler build environment.
+      # Signing is done on the OHOS device after installation.
 
       # ===== Package & Release =====
 
