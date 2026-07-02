@@ -7,7 +7,7 @@
 # Or without proxy:
 #   curl -fsSL https://github.com/sb-fy-sb/bun/releases/download/ohos-latest/install-bun-ohos.sh | sh
 #
-# Install directory: ~/usr/bun/bin/bun
+# Install directory: ~/usr/bin/bun
 #
 set -eu
 
@@ -117,40 +117,37 @@ ok "Downloaded $((FILE_SIZE / 1048576)) MB"
 chmod +x "$INSTALL_BIN"
 ok "Installed to $INSTALL_BIN"
 
-# --- PATH setup ---
+# --- PATH setup (永久写入) ---
 
+# Resolve to absolute path (e.g. /storage/Users/currentUser/usr/bin)
 BIN_DIR="$INSTALL_DIR"
-PROFILE=""
+BIN_DIR_ABS=$(cd "$BIN_DIR" 2>/dev/null && pwd || echo "$BIN_DIR")
 
-# Find the right shell profile
-if [ -n "${BASH_VERSION:-}" ] || [ "$(basename "${SHELL:-}")" = "bash" ]; then
-  [ -f "$HOME/.bashrc" ] && PROFILE="$HOME/.bashrc"
-  [ -f "$HOME/.bash_profile" ] && PROFILE="$HOME/.bash_profile"
-elif [ -n "${ZSH_VERSION:-}" ] || [ "$(basename "${SHELL:-}")" = "zsh" ]; then
-  [ -f "$HOME/.zshrc" ] && PROFILE="$HOME/.zshrc"
-fi
+# Try all common profile files to ensure PATH persists
+PROFILE_FILES="$HOME/.bashrc $HOME/.bash_profile $HOME/.profile $HOME/.zshrc $HOME/.mkshrc"
+PATH_LINE="export PATH=\"$BIN_DIR_ABS:\$PATH\""
 
-# Also check .profile as fallback
-[ -z "$PROFILE" ] && [ -f "$HOME/.profile" ] && PROFILE="$HOME/.profile"
-
-PATH_LINE="export PATH=\"$BIN_DIR:\$PATH\""
-
-if [ -n "$PROFILE" ]; then
-  if ! grep -qF "$BIN_DIR" "$PROFILE" 2>/dev/null; then
-    echo "" >> "$PROFILE"
-    echo "# Bun OHOS" >> "$PROFILE"
-    echo "$PATH_LINE" >> "$PROFILE"
-    ok "Added $BIN_DIR to PATH in $PROFILE"
-  else
-    ok "$BIN_DIR already in PATH ($PROFILE)"
+WRITTEN=0
+for f in $PROFILE_FILES; do
+  if [ -f "$f" ]; then
+    if ! grep -qF "$BIN_DIR_ABS" "$f" 2>/dev/null; then
+      echo "" >> "$f"
+      echo "# Bun OHOS" >> "$f"
+      echo "$PATH_LINE" >> "$f"
+      ok "Added PATH to $f"
+    fi
+    WRITTEN=1
   fi
-else
-  warn "Could not find shell profile. Add this to your shell config manually:"
-  warn "  $PATH_LINE"
+done
+
+# If no profile files exist, create .profile
+if [ "$WRITTEN" = "0" ]; then
+  echo "$PATH_LINE" > "$HOME/.profile"
+  ok "Created $HOME/.profile with PATH"
 fi
 
 # Export PATH for current session
-export PATH="$BIN_DIR:$PATH"
+export PATH="$BIN_DIR_ABS:$PATH"
 
 # --- Verify & Sign ---
 
@@ -192,8 +189,7 @@ fi
 
 echo ""
 echo "  bun is installed at: $INSTALL_BIN"
+echo "  PATH permanently added to: $BIN_DIR_ABS"
 echo ""
-echo "  To get started:"
-echo "    export PATH=\"$BIN_DIR:\$PATH\""
-echo "    bun --version"
+echo "  Run: bun --version"
 echo ""
