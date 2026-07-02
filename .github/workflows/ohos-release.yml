@@ -248,73 +248,67 @@ jobs:
         working-directory: bun
         run: |
           BIN=build/release-ohos/bun
-          SDK=${{ env.OHOS_SDK_ROOT }}
 
-          # Search for binary-sign-tool.jar
+          # binary-sign-tool: native ARM64 ELF in OHOS SDK toolchains
           SIGN_TOOL=""
           for p in \
-            "$SDK/ohos/native/llvm/share/binary-sign-tool.jar" \
-            "$SDK/toolchains/lib/binary-sign-tool.jar" \
-            "$SDK/../toolchains/lib/binary-sign-tool.jar" \
-            "/opt/ohos/toolchains/lib/binary-sign-tool.jar"; do
-            if [ -f "$p" ]; then SIGN_TOOL="$p"; break; fi
+            "/home/user/linux-aarch64/toolchains/lib/binary-sign-tool" \
+            "$OHOS_SDK_ROOT/../linux-aarch64/toolchains/lib/binary-sign-tool" \
+            "/opt/ohos/toolchains/lib/binary-sign-tool"; do
+            if [ -x "$p" ]; then SIGN_TOOL="$p"; break; fi
           done
-          # Fallback: search common paths
-          if [ -z "$SIGN_TOOL" ]; then
-            SIGN_TOOL=$(find "$SDK" /opt /usr/local -name "binary-sign-tool.jar" 2>/dev/null | head -1)
-          fi
 
-          if [ -z "$SIGN_TOOL" ]; then
-            echo "⚠️ binary-sign-tool.jar not found, skipping signing"
+          if [ -z "$SIGN_TOOL" ] || [ ! -x "$SIGN_TOOL" ]; then
+            echo "⚠️ binary-sign-tool not found, skipping signing"
             exit 0
           fi
 
-          # Check Java
-          if ! command -v java &>/dev/null; then
-            echo "⚠️ Java not found, skipping signing"
-            exit 0
-          fi
-
-          # Search for keystore
+          # Keystore
           KEYSTORE=""
           for p in \
-            "ohos/signing/ohos-self-sign.p12" \
-            "/home/user/signing/ohos-self-sign.p12" \
-            "$SDK/signing/ohos-self-sign.p12"; do
+            "/home/user/linux-aarch64/toolchains/lib/OpenHarmony.p12" \
+            "$OHOS_SDK_ROOT/../linux-aarch64/toolchains/lib/OpenHarmony.p12"; do
             if [ -f "$p" ]; then KEYSTORE="$p"; break; fi
           done
 
-          if [ -z "$KEYSTORE" ]; then
-            echo "⚠️ Keystore (.p12) not found, skipping signing"
-            exit 0
-          fi
-
           echo "Sign tool: $SIGN_TOOL"
-          echo "Keystore: $KEYSTORE"
+          echo "Keystore: ${KEYSTORE:-"(using -selfSign 1)"}"
 
-          # Remove existing .codesign section if present
+          # Remove existing .codesign section if present (re-signing fails otherwise)
           readelf -S "$BIN" 2>/dev/null | grep -q codesign && \
-            $SDK/llvm-22/bin/llvm-objcopy --remove-section=.codesign "$BIN" 2>/dev/null || true
+            $OHOS_SDK_ROOT/llvm-22/bin/llvm-objcopy --remove-section=.codesign "$BIN" 2>/dev/null || true
 
           # Sign
           SIGNED="${BIN}.signed"
           rm -f "$SIGNED"
-          java -jar "$SIGN_TOOL" sign \
-            -mode localSign \
-            -keyAlias ohos-key \
-            -inFile "$BIN" \
-            -signAlg SHA256withECDSA \
-            -keystoreFile "$KEYSTORE" \
-            -keystorePwd ohos123456 \
-            -keyPwd ohos123456 \
-            -selfSign 1 \
-            -outFile "$SIGNED" || {
+
+          if [ -n "$KEYSTORE" ]; then
+            "$SIGN_TOOL" sign \
+              -inFile "$BIN" \
+              -outFile "$SIGNED" \
+              -signAlg SHA256withECDSA \
+              -keystoreFile "$KEYSTORE" \
+              -selfSign 1 || {
+                echo "⚠️ Keystore signing failed, trying self-sign..."
+                rm -f "$SIGNED"
+                "$SIGN_TOOL" sign -inFile "$BIN" -outFile "$SIGNED" -selfSign 1 || {
+                  echo "⚠️ Signing failed, using unsigned binary"
+                  exit 0
+                }
+              }
+          else
+            "$SIGN_TOOL" sign -inFile "$BIN" -outFile "$SIGNED" -selfSign 1 || {
               echo "⚠️ Signing failed, using unsigned binary"
               exit 0
             }
+          fi
 
-          mv -f "$SIGNED" "$BIN"
-          echo "✅ Binary signed successfully"
+          if [ -f "$SIGNED" ]; then
+            mv -f "$SIGNED" "$BIN"
+            echo "✅ Binary signed successfully"
+          else
+            echo "⚠️ Signed output not found, using unsigned binary"
+          fi
 
       # ===== Package & Release =====
 
