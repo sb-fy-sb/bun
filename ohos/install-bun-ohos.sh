@@ -14,8 +14,8 @@ set -eu
 REPO="sb-fy-sb/bun"
 RELEASE_TAG="ohos-latest"
 BINARY_NAME="bun-ohos-aarch64"
-INSTALL_DIR="$HOME/usr/bun"
-INSTALL_BIN="$INSTALL_DIR/bin/bun"
+INSTALL_DIR="$HOME/usr/bin"
+INSTALL_BIN="$INSTALL_DIR/bun"
 PROXY="${BUN_INSTALL_PROXY:-https://ghfast.top/}"
 
 # Colors (if terminal supports them)
@@ -114,7 +114,7 @@ ok "Downloaded $((FILE_SIZE / 1048576)) MB"
 # --- Install ---
 
 # Create install directory
-mkdir -p "$INSTALL_DIR/bin"
+mkdir -p "$INSTALL_DIR"
 
 # Remove old binary if exists
 if [ -f "$INSTALL_BIN" ]; then
@@ -129,7 +129,7 @@ ok "Installed to $INSTALL_BIN"
 
 # --- PATH setup ---
 
-BIN_DIR="$INSTALL_DIR/bin"
+BIN_DIR="$INSTALL_DIR"
 PROFILE=""
 
 # Find the right shell profile
