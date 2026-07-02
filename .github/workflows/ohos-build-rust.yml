@@ -238,6 +238,46 @@ jobs:
         env:
           CI: true
 
+      - name: Patch build.ninja for OHOS host compilation
+        working-directory: bun
+        run: |
+          # 1. Host 编译器改用系统 clang (dep_host_cc 规则)
+          #    LLVM 22 clang 找不到 GCC 运行时 (crtbeginS.o, -lgcc, -lgcc_s)
+          if grep -q "llvm-22/bin/clang \$flags -o \$out \$in" build/release-ohos/build.ninja 2>/dev/null; then
+            sed -i 's|command = .*/llvm-22/bin/clang $flags -o $out $in|command = /usr/bin/clang $flags -o $out $in|' \
+              build/release-ohos/build.ninja
+            echo "✅ Patched dep_host_cc to use system clang"
+          else
+            echo "⚠️ dep_host_cc rule not found or already patched"
+          fi
+          # 2. 修复 -lpthreads → -lpthread (WebKit CMake 生成错误)
+          if [ -f build/release-ohos/deps/WebKit/build.ninja ]; then
+            sed -i 's/-lpthreads/-lpthread/g' build/release-ohos/deps/WebKit/build.ninja
+            echo "✅ Patched -lpthreads → -lpthread"
+          fi
+          # 3. Rust HOST 链接器改用系统 clang++ (避免 -lgcc_s 找不到)
+          if [ -f .cargo/config.toml ] && grep -q 'aarch64-unknown-linux-gnu' .cargo/config.toml; then
+            python3 -c "
+          import re
+          with open('.cargo/config.toml', 'r') as f:
+              content = f.read()
+          content = re.sub(
+              r'\[target\.aarch64-unknown-linux-gnu\]\nlinker = \"[^\"]*\"',
+              '[target.aarch64-unknown-linux-gnu]\nlinker = \"/usr/bin/clang++\"',
+              content
+          )
+          with open('.cargo/config.toml', 'w') as f:
+              f.write(content)
+          print('✅ Patched Rust host linker to system clang++')
+          " || echo "⚠️ Could not patch .cargo/config.toml"
+          fi
+          # 4. 添加 RUSTUP 镜像 (中国网络环境加速)
+          if ! grep -q "RUSTUP_DIST_SERVER" build/release-ohos/build.ninja 2>/dev/null; then
+            sed -i 's|--env=CARGO_HOME=/home/user/.cargo|--env=CARGO_HOME=/home/user/.cargo --env=RUSTUP_DIST_SERVER=https://rsproxy.cn --env=RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup|g' \
+              build/release-ohos/build.ninja 2>/dev/null || true
+            echo "✅ Added RUSTUP mirror config"
+          fi
+
       - name: Build WebKit
         if: steps.webkit-cache.outputs.cache-hit != 'true'
         working-directory: bun
