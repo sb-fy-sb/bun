@@ -188,7 +188,11 @@ jobs:
           [ -L bun/build/ohos-icu ] && [ "$(readlink bun/build/ohos-icu)" = "$(dirname $OHOS_ICU_DIR)" ] || ln -sfn "$(dirname $OHOS_ICU_DIR)" bun/build/ohos-icu
           test -d bun/build/ohos-cross-libs/libcxx/lib || { echo "Cross libs not found"; exit 1; }
           test -d bun/build/ohos-icu/target/lib || { echo "ICU not found"; exit 1; }
-          echo "✅ Environment ready"
+          # LLVM 22 must be in PATH for the build script to find clang >=21.1.0
+          echo "PATH=$OHOS_SDK_ROOT/llvm-22/bin:$PATH" >> $GITHUB_ENV
+          echo "CC=$OHOS_SDK_ROOT/llvm-22/bin/clang" >> $GITHUB_ENV
+          echo "CXX=$OHOS_SDK_ROOT/llvm-22/bin/clang++" >> $GITHUB_ENV
+          echo "✅ Environment ready (clang: $($OHOS_SDK_ROOT/llvm-22/bin/clang --version | head -1))"
 
       - name: Restore incremental build artifacts
         run: |
