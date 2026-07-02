@@ -74,38 +74,39 @@ ok "Downloader: $DOWNLOADER"
 # --- Download ---
 
 DOWNLOAD_URL="${PROXY}https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${BINARY_NAME}"
-TMP_FILE=$(mktemp /tmp/bun-ohos-XXXXXX)
+
+# Create install directory first, download directly to target
+mkdir -p "$INSTALL_DIR"
+rm -f "$INSTALL_BIN"
 
 info "Downloading bun from:"
 info "  $DOWNLOAD_URL"
 
 if [ "$DOWNLOADER" = "curl" ]; then
-  HTTP_CODE=$(curl -fsSL -w '%{http_code}' -o "$TMP_FILE" "$DOWNLOAD_URL" 2>/dev/null) || {
-    # Try without proxy
+  curl -fsSL -o "$INSTALL_BIN" "$DOWNLOAD_URL" 2>/dev/null || {
     warn "Proxy download failed, trying direct..."
-    HTTP_CODE=$(curl -fsSL -w '%{http_code}' -o "$TMP_FILE" \
-      "https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${BINARY_NAME}" 2>/dev/null) || \
-      error "Download failed (HTTP $HTTP_CODE). Check your network."
-  }
-else
-  wget -q -O "$TMP_FILE" "$DOWNLOAD_URL" 2>/dev/null || {
-    warn "Proxy download failed, trying direct..."
-    wget -q -O "$TMP_FILE" \
+    curl -fsSL -o "$INSTALL_BIN" \
       "https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${BINARY_NAME}" 2>/dev/null || \
       error "Download failed. Check your network."
   }
-  HTTP_CODE=200
+else
+  wget -q -O "$INSTALL_BIN" "$DOWNLOAD_URL" 2>/dev/null || {
+    warn "Proxy download failed, trying direct..."
+    wget -q -O "$INSTALL_BIN" \
+      "https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${BINARY_NAME}" 2>/dev/null || \
+      error "Download failed. Check your network."
+  }
 fi
 
 # Verify download
-if [ ! -s "$TMP_FILE" ]; then
-  rm -f "$TMP_FILE"
+if [ ! -s "$INSTALL_BIN" ]; then
+  rm -f "$INSTALL_BIN"
   error "Downloaded file is empty"
 fi
 
-FILE_SIZE=$(wc -c < "$TMP_FILE" | tr -d ' ')
+FILE_SIZE=$(wc -c < "$INSTALL_BIN" | tr -d ' ')
 if [ "$FILE_SIZE" -lt 1000000 ]; then
-  rm -f "$TMP_FILE"
+  rm -f "$INSTALL_BIN"
   error "Downloaded file too small (${FILE_SIZE} bytes), likely corrupted"
 fi
 
@@ -113,17 +114,6 @@ ok "Downloaded $((FILE_SIZE / 1048576)) MB"
 
 # --- Install ---
 
-# Create install directory
-mkdir -p "$INSTALL_DIR"
-
-# Remove old binary if exists
-if [ -f "$INSTALL_BIN" ]; then
-  info "Removing old bun at $INSTALL_BIN"
-  rm -f "$INSTALL_BIN"
-fi
-
-# Move binary
-mv "$TMP_FILE" "$INSTALL_BIN"
 chmod +x "$INSTALL_BIN"
 ok "Installed to $INSTALL_BIN"
 
