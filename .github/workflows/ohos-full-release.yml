@@ -42,6 +42,18 @@ jobs:
           $env:PATH = "C:\Strawberry\perl\bin;C:\Strawberry\c\bin;C:\Program Files\LLVM\bin;" + $env:PATH
           $env:RUSTUP_DIST_SERVER = "https://rsproxy.cn"
           $env:RUSTUP_UPDATE_ROOT = "https://rsproxy.cn/rustup"
+
+          # Run configure + first build pass (will fail on zstd symlinks)
+          bun run build:release 2>&1 | Out-Null
+
+          # Fix zstd: create dummy symlink targets that Windows tar can't create
+          $zstdBin = "vendor\zstd\tests\cli-tests\bin"
+          if (Test-Path $zstdBin) {
+            "zstd --help" | Set-Content "$zstdBin\unzstd" -ErrorAction SilentlyContinue
+            "zstd --help" | Set-Content "$zstdBin\zstdcat" -ErrorAction SilentlyContinue
+          }
+
+          # Retry build (zstd will be skipped since .ref exists)
           bun run build:release
 
       - name: Verify binary
