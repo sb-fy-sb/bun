@@ -39,7 +39,7 @@ jobs:
       - name: Build Bun (release)
         shell: pwsh
         run: |
-          $env:PATH = "C:\Strawberry\perl\bin;C:\Program Files\NASM;C:\Program Files\LLVM\bin;" + $env:PATH
+          $env:PATH = "C:\Strawberry\perl\bin;C:\Strawberry\c\bin;C:\Program Files\LLVM\bin;" + $env:PATH
           $env:RUSTUP_DIST_SERVER = "https://rsproxy.cn"
           $env:RUSTUP_UPDATE_ROOT = "https://rsproxy.cn/rustup"
           bun run build:release
