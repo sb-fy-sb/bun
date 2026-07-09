@@ -1396,9 +1396,10 @@ export const linkerFlags: Flag[] = [
       "-Wl,--undefined=us_socket_sni_resolve",
       "-Wl,--undefined=us_socket_set_tos",
       "-Wl,--undefined=us_socket_tls_feed",
-      "-Wl,--undefined=Bun__dlopen"],
+      "-Wl,--undefined=Bun__dlopen",
+      "-Wl,--undefined=BUN_COMPILED"],
     when: c => c.release && c.ohos,
-    desc: "Force-keep uSockets SSL symbols + Bun__dlopen referenced via Rust FFI (OHOS)",
+    desc: "Force-keep uSockets SSL symbols + Bun__dlopen + .bun section (OHOS)",
   },
   {
     // Always icf=safe in release. The stripped `bun` shares its build-id
