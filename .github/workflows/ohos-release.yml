@@ -45,100 +45,10 @@ env:
   WEBKIT_REF: ohos-aarch64
 
 jobs:
-  # ===== Host bundler for Windows (built from main branch on GitHub-hosted runner) =====
-  host-windows:
-    name: Host bundler (Windows x64)
-    runs-on: windows-latest
-    timeout-minutes: 300
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Install Bun
-        run: irm bun.sh/install.ps1 | iex
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2026-06-06
-          targets: x86_64-pc-windows-msvc
-          components: rust-src
-
-      - name: Install NASM
-        run: |
-          choco install nasm -y
-          echo "C:\Program Files\NASM" >> $env:GITHUB_PATH
-
-      - name: Build Bun (release)
-        shell: pwsh
-        run: |
-          $env:PATH = "C:\Program Files\NASM;" + $env:PATH
-          bun run build:release
-
-      - name: Verify binary
-        shell: pwsh
-        run: |
-          $bin = "build\release\bun.exe"
-          if (-not (Test-Path $bin)) { throw "bun.exe not found" }
-          & $bin --version
-          Write-Host "✅ Windows bun built successfully"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: host-bun-windows-x64
-          path: build/release/bun.exe
-          retention-days: 7
-
-  # ===== Host bundler for Linux x64 (built from main branch on GitHub-hosted runner) =====
-  host-linux:
-    name: Host bundler (Linux x64)
-    runs-on: ubuntu-latest
-    timeout-minutes: 300
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Install Bun
-        run: curl -fsSL https://bun.sh/install | bash
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2026-06-06
-          components: rust-src
-
-      - name: Install system deps
-        run: sudo apt-get update && sudo apt-get install -y ninja-build cmake clang lld
-
-      - name: Build Bun (release)
-        run: |
-          export PATH="$HOME/.bun/bin:$PATH"
-          bun run build:release
-
-      - name: Verify binary
-        run: |
-          if [ ! -f build/release/bun ]; then echo "bun not found"; exit 1; fi
-          build/release/bun --version
-          echo "✅ Linux bun built successfully"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: host-bun-linux-x64
-          path: build/release/bun
-          retention-days: 7
-
-  # ===== OHOS Build =====
   release:
     name: Build & Release Bun for OHOS
     runs-on: [self-hosted, Linux, ARM64]
     timeout-minutes: 300
-    needs: [host-windows, host-linux]
     permissions:
       contents: write
 
@@ -331,27 +241,6 @@ jobs:
       # It cannot run on the openEuler build environment.
       # Signing is done on the OHOS device after installation.
 
-      # ===== Download host bundlers =====
-
-      - name: Download host bundlers
-        uses: actions/download-artifact@v4
-        with:
-          path: host-bundlers
-
-      - name: Prepare host bundlers for release
-        run: |
-          WIN_BUN=$(find host-bundlers/host-bun-windows-x64 -name "bun.exe" -type f | head -1)
-          LINUX_BUN=$(find host-bundlers/host-bun-linux-x64 -name "bun" -type f | head -1)
-          echo "Windows: $WIN_BUN"
-          echo "Linux: $LINUX_BUN"
-          RELEASE_DIR=/tmp/bun-release
-          mkdir -p $RELEASE_DIR
-          [ -f "$WIN_BUN" ] && cp "$WIN_BUN" $RELEASE_DIR/bun-bundler-windows-x64.exe
-          [ -f "$LINUX_BUN" ] && cp "$LINUX_BUN" $RELEASE_DIR/bun-bundler-linux-x64 && chmod +x $RELEASE_DIR/bun-bundler-linux-x64
-          echo "HOST_WIN=$RELEASE_DIR/bun-bundler-windows-x64.exe" >> $GITHUB_ENV
-          echo "HOST_LINUX=$RELEASE_DIR/bun-bundler-linux-x64" >> $GITHUB_ENV
-          echo "✅ Host bundlers ready"
-
       # ===== Package & Release =====
 
       - name: Package release
@@ -399,8 +288,6 @@ jobs:
             ${{ steps.package.outputs.binary_path }}
             ${{ steps.package.outputs.archive_path }}
             ${{ steps.package.outputs.script_path }}
-            ${{ env.HOST_WIN }}
-            ${{ env.HOST_LINUX }}
           generate_release_notes: true
           name: "Bun OHOS ${{ github.ref_name }}"
           body: |
@@ -409,18 +296,16 @@ jobs:
             Version: ${{ steps.package.outputs.version }}
             Commit: ${{ github.sha }}
 
-            ### Quick Install (OHOS device)
+            ### Quick Install
 
             ```bash
             curl -fsSL https://ghfast.top/https://github.com/sb-fy-sb/bun/releases/download/ohos-latest/install-bun-ohos.sh | sh
             ```
 
-            ### Host Bundlers (for `bun build --compile` cross-compilation)
+            ### Manual Download
 
-            - `bun-bundler-windows-x64.exe` — Windows x64 host bundler (from main branch)
-            - `bun-bundler-linux-x64` — Linux x64 host bundler (from main branch)
-
-            Use matching host bundler + OHOS runtime for `bun build --compile`.
+            - `bun-ohos-aarch64` — Raw binary
+            - `${{ steps.package.outputs.archive_name }}.tar.gz` — Versioned archive
 
       - name: Update ohos-latest release
         uses: softprops/action-gh-release@v2
@@ -431,8 +316,6 @@ jobs:
             ${{ steps.package.outputs.binary_path }}
             ${{ steps.package.outputs.archive_path }}
             ${{ steps.package.outputs.script_path }}
-            ${{ env.HOST_WIN }}
-            ${{ env.HOST_LINUX }}
           body: |
             ## Latest Bun for HarmonyOS (OHOS) aarch64
 
