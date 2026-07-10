@@ -218,3 +218,76 @@ jobs:
           echo "✅ Deployed to $SHARE/${DEST_NAME}.elf"
           echo "✅ Latest: $SHARE/bun-ohos-aarch64"
           ls -lh "$SHARE"/bun-ohos*
+
+  # ===== Linux ARM64 native build (for --compile-executable-path) =====
+  linux-arm64:
+    name: Build Bun for Linux ARM64 (native)
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 300
+    steps:
+      - name: Checkout Bun source (incremental)
+        run: |
+          LOCAL=/home/user/sources/bun
+          rm -rf bun-linux
+          if [ -d "$LOCAL/.git" ]; then
+            git clone --reference "$LOCAL/.git" \
+              https://github.com/sb-fy-sb/bun.git bun-linux 2>/dev/null || \
+            git clone --depth 1 --branch ohos-aarch64 \
+              https://github.com/sb-fy-sb/bun.git bun-linux
+            cd bun-linux
+            git fetch origin ohos-aarch64 --depth=1
+            git checkout -f FETCH_HEAD
+            echo "✅ Cloned from local reference"
+          else
+            git clone --depth 1 --branch ohos-aarch64 \
+              https://github.com/sb-fy-sb/bun.git bun-linux
+            echo "⚠️ Full clone (no local reference)"
+          fi
+
+      - name: Setup environment
+        run: |
+          echo "PATH=/usr/bin:$PATH" >> $GITHUB_ENV
+          echo "CC=/usr/bin/clang" >> $GITHUB_ENV
+          echo "CXX=/usr/bin/clang++" >> $GITHUB_ENV
+
+      - name: Configure Bun build (Linux ARM64 native)
+        working-directory: bun-linux
+        run: |
+          bun run build:release \
+            --os=linux \
+            --arch=aarch64 \
+            --webkit=prebuilt \
+            --build-dir=build/release-linux \
+            --configure-only
+        env:
+          CI: true
+
+      - name: Build Bun (Linux ARM64)
+        working-directory: bun-linux
+        run: |
+          ninja -C build/release-linux bun -j$NINJA_JOBS || \
+            ninja -C build/release-linux bun -j$NINJA_JOBS
+
+      - name: Verify binary
+        working-directory: bun-linux
+        run: |
+          file build/release-linux/bun
+          ls -lh build/release-linux/bun
+          file build/release-linux/bun | grep -q "ELF.*ARM aarch64" || {
+            echo "ERROR: Not an ARM64 ELF binary"
+            file build/release-linux/bun
+            exit 1
+          }
+          echo "✅ Linux ARM64 binary validation passed"
+
+      - name: Deploy to shared directory
+        working-directory: bun-linux
+        run: |
+          SHARE=/mnt/linux_share/ci-test
+          mkdir -p $SHARE
+          VERSION=$(build/release-linux/bun --version 2>/dev/null || python3 -c "import json; print(json.load(open('package.json'))['version'])")
+          COMMIT=$(git rev-parse --short HEAD)
+          cp build/release-linux/bun "$SHARE/bun-linux-aarch64"
+          chmod +x "$SHARE/bun-linux-aarch64"
+          echo "✅ Linux ARM64 bun deployed to $SHARE/bun-linux-aarch64"
+          ls -lh "$SHARE"/bun-linux*
