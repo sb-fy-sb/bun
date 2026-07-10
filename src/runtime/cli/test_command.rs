@@ -146,6 +146,7 @@ mod bun_test {
 /// SIGALRM handler for the test-process safety-net timeout.
 /// When the event-loop timer cannot fire (blocking syscall, GC deadlock, etc.),
 /// this hard-exits the process to prevent 40-minute hangs.
+#[cfg(unix)]
 extern "C" fn sig_alrm_handler(_sig: i32) {
     // `_exit` is async-signal-safe and does not run atexit handlers or
     // global destructors — safe to call from a signal handler.
@@ -2057,6 +2058,7 @@ impl TestCommand {
         // this alarm will force-exit the process via signal handler.
         // Give 60s extra headroom beyond the per-test timeout so the event-loop
         // timer (first line of defense) has time to fire normally.
+        #[cfg(unix)]
         {
             let timeout_ms = ctx.test_options.default_timeout_ms;
             if timeout_ms > 0 && timeout_ms < u32::MAX {

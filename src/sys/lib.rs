@@ -930,9 +930,7 @@ pub use tmp::Tmpfile;
 // `#[cfg(windows)]` arms in dependents.
 pub mod windows;
 
-#[cfg(not(windows))]
-use core::ffi::c_int;
-use core::ffi::{c_char, c_void};
+use core::ffi::{c_char, c_int, c_void};
 
 // ──────────────────────────────────────────────────────────────────────────
 // Re-exports from lower-tier crates (PORTING.md crate map).
