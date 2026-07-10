@@ -76,6 +76,25 @@ jobs:
             Write-Host "Pre-extracted zstd (ref=$identity)"
           }
 
+          # Pre-download WebKit prebuilt (GitHub is inaccessible from China)
+          $webkitCache = "$env:USERPROFILE\.bun\build-cache\webkit-c9ad5813fd23bd8b"
+          $webkitUrl = "https://github.com/oven-sh/WebKit/releases/download/autobuild-c9ad5813fd23bd8b98b0738abc3d037ec716aa92/bun-webkit-windows-amd64.tar.gz"
+          $webkitProxy = "https://ghfast.top/$webkitUrl"
+          if (-not (Test-Path "$webkitCache\.identity")) {
+            Write-Host "Downloading WebKit prebuilt via proxy..."
+            New-Item -ItemType Directory -Path $webkitCache -Force | Out-Null
+            $tarball = "$env:USERPROFILE\.bun\build-cache\tarballs\webkit-prebuilt.tar.gz"
+            New-Item -ItemType Directory -Path (Split-Path $tarball) -Force | Out-Null
+            curl -fsSL -o $tarball $webkitProxy
+            if (Test-Path $tarball) {
+              tar xzf $tarball -C $webkitCache 2>$null
+              "c9ad5813fd23bd8b98b0738abc3d037ec716aa92" | Set-Content "$webkitCache\.identity" -NoNewline -Encoding UTF8
+              Write-Host "WebKit prebuilt extracted"
+            } else {
+              Write-Host "WARNING: WebKit download failed"
+            }
+          }
+
           bun run build:release
 
       - name: Verify binary
