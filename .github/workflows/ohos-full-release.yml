@@ -225,20 +225,23 @@ jobs:
     runs-on: [self-hosted, Linux, ARM64]
     timeout-minutes: 300
     steps:
-      - name: Checkout Bun source (local copy)
+      - name: Checkout Bun source (incremental)
         run: |
           LOCAL=/home/user/sources/bun
           rm -rf bun-linux
           if [ -d "$LOCAL/.git" ]; then
-            # Copy from local source instead of cloning from GitHub
-            cp -a "$LOCAL" bun-linux
+            git clone --reference "$LOCAL/.git" \
+              https://github.com/sb-fy-sb/bun.git bun-linux 2>/dev/null || \
+            git clone --depth 1 --branch ohos-aarch64 \
+              https://github.com/sb-fy-sb/bun.git bun-linux
             cd bun-linux
-            git fetch origin ohos-aarch64 --depth=1 2>/dev/null || true
-            git checkout -f FETCH_HEAD 2>/dev/null || git checkout -f ohos-aarch64 2>/dev/null || true
-            echo "✅ Copied from local source"
+            git fetch origin ohos-aarch64 --depth=1
+            git checkout -f FETCH_HEAD
+            echo "✅ Cloned from local reference"
           else
-            echo "❌ Local source not found at $LOCAL"
-            exit 1
+            git clone --depth 1 --branch ohos-aarch64 \
+              https://github.com/sb-fy-sb/bun.git bun-linux
+            echo "⚠️ Full clone (no local reference)"
           fi
 
       - name: Setup environment
