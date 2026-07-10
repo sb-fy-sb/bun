@@ -246,9 +246,9 @@ jobs:
 
       - name: Setup environment
         run: |
-          echo "PATH=/usr/bin:$PATH" >> $GITHUB_ENV
-          echo "CC=/usr/bin/clang" >> $GITHUB_ENV
-          echo "CXX=/usr/bin/clang++" >> $GITHUB_ENV
+          echo "PATH=/home/user/setup-ohos-sdk/llvm-22/bin:/usr/bin:$PATH" >> $GITHUB_ENV
+          echo "CC=/home/user/setup-ohos-sdk/llvm-22/bin/clang" >> $GITHUB_ENV
+          echo "CXX=/home/user/setup-ohos-sdk/llvm-22/bin/clang++" >> $GITHUB_ENV
 
       - name: Configure Bun build (Linux ARM64 native)
         working-directory: bun-linux
