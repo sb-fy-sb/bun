@@ -338,20 +338,6 @@ jobs:
           echo "artifact_name=${NAME}" >> $GITHUB_ENV
           echo "artifact_path=/tmp/bun-release/${NAME}.tar.gz" >> $GITHUB_ENV
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.artifact_name }}
-          path: ${{ env.artifact_path }}
-          retention-days: 30
-
-      - name: Upload binary (raw)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.artifact_name }}.bun
-          path: bun/build/release-ohos/bun
-          retention-days: 30
-
       - name: Copy artifacts to shared directory
         working-directory: bun
         run: |
