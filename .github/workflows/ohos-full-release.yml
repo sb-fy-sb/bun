@@ -43,17 +43,39 @@ jobs:
           $env:RUSTUP_DIST_SERVER = "https://rsproxy.cn"
           $env:RUSTUP_UPDATE_ROOT = "https://rsproxy.cn/rustup"
 
-          # Run configure + first build pass (will fail on zstd symlinks)
-          bun run build:release 2>&1 | Out-Null
+          # Pre-extract zstd to avoid symlink issue in tar.exe
+          $zstdDir = "vendor\zstd"
+          $zstdRef = "f8745da6ff1ad1e7bab384bd1f9d742439278e99"
+          $cacheDir = "$env:USERPROFILE\.bun\build-cache\tarballs"
+          $tarball = Get-ChildItem "$cacheDir\zstd-*.tar.gz" -ErrorAction SilentlyContinue | Select-Object -First 1
 
-          # Fix zstd: create dummy symlink targets that Windows tar can't create
-          $zstdBin = "vendor\zstd\tests\cli-tests\bin"
-          if (Test-Path $zstdBin) {
-            "zstd --help" | Set-Content "$zstdBin\unzstd" -ErrorAction SilentlyContinue
-            "zstd --help" | Set-Content "$zstdBin\zstdcat" -ErrorAction SilentlyContinue
+          if (-not $tarball) {
+            # Download zstd tarball first
+            New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+            $url = "https://github.com/facebook/zstd/archive/$zstdRef.tar.gz"
+            Invoke-WebRequest -Uri $url -OutFile "$cacheDir\zstd-manual.tar.gz" -ErrorAction SilentlyContinue
+            $tarball = "$cacheDir\zstd-manual.tar.gz"
           }
 
-          # Retry build (zstd will be skipped since .ref exists)
+          if ($tarball -and (Test-Path $tarball)) {
+            New-Item -ItemType Directory -Path $zstdDir -Force | Out-Null
+            # Extract, ignoring symlink errors
+            tar xzf "$tarball" -C $zstdDir --strip-components=1 2>$null
+            # Create dummy symlink targets
+            $binDir = "$zstdDir\tests\cli-tests\bin"
+            New-Item -ItemType Directory -Path $binDir -Force | Out-Null
+            "#!/bin/sh" | Set-Content "$binDir\unzstd"
+            "#!/bin/sh" | Set-Content "$binDir\zstdcat"
+            # Write .ref to skip fetch
+            # Identity = sha256(commit)[:16] with no patches
+            $hash = [System.Security.Cryptography.SHA256]::Create()
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($zstdRef)
+            $digest = ($hash.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join ""
+            $identity = $digest.Substring(0, 16)
+            $identity | Set-Content "$zstdDir\.ref" -NoNewline
+            Write-Host "Pre-extracted zstd (ref=$identity)"
+          }
+
           bun run build:release
 
       - name: Verify binary
