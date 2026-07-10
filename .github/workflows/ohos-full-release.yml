@@ -72,7 +72,7 @@ jobs:
             $bytes = [System.Text.Encoding]::UTF8.GetBytes($zstdRef)
             $digest = ($hash.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join ""
             $identity = $digest.Substring(0, 16)
-            $identity | Set-Content "$zstdDir\.ref" -NoNewline
+            $identity | Set-Content "$zstdDir\.ref" -NoNewline -Encoding UTF8
             Write-Host "Pre-extracted zstd (ref=$identity)"
           }
 
@@ -184,10 +184,16 @@ jobs:
       - name: Patch build.ninja
         working-directory: bun
         run: |
+          # Fix host C compiler (dep_host_cc uses LLVM 22 clang, needs system clang)
           sed -i 's|command = .*/llvm-22/bin/clang $flags -o $out $in|command = /usr/bin/clang $flags -o $out $in|' \
             build/release-ohos/build.ninja 2>/dev/null || true
+          # Fix -lpthreads → -lpthread in WebKit
           [ -f build/release-ohos/deps/WebKit/build.ninja ] && \
             sed -i 's/-lpthreads/-lpthread/g' build/release-ohos/deps/WebKit/build.ninja || true
+          # Fix Rust HOST linker (aarch64-unknown-linux-gnu must use system clang++, not OHOS clang++)
+          if [ -f .cargo/config.toml ]; then
+            sed -i '/\[target\.aarch64-unknown-linux-gnu\]/{n;s|linker = ".*"|linker = "/usr/bin/clang++"|}' .cargo/config.toml
+          fi
 
       - name: Build WebKit
         if: steps.webkit-cache.outputs.cache-hit != 'true'
